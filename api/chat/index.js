@@ -83,7 +83,7 @@ module.exports = async (req, res) => {
   const NS_PER_SEC = 1e9;
   const checkTimeout = () => {
     const diff = process.hrtime.bigint() - start;
-    if (Number(diff) / NS_PER_SEC > 8.5) {
+    if (Number(diff) / NS_PER_SEC > 10.5) {
       throw new Error('Abort quantum timeout');
     }
   };
@@ -105,17 +105,17 @@ module.exports = async (req, res) => {
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 8000,  // 8 second timeout
+      timeout: 10000,  // 8 second timeout
       maxRetries: 0,   // No retries to avoid prolonging timeouts
       httpAgent: new http.Agent({
         keepAlive: true,
         maxSockets: 1,
         scheduling: 'fifo', // Prioritize first-in requests
-        timeout: 8000 // Socket-level timeout
+        timeout: 10000 // Socket-level timeout
       }),
       fetch: async (url, init) => {
         const controller = new AbortController();
-        setTimeout(() => controller.abort(), 7500);
+        setTimeout(() => controller.abort(), 10000);
         return fetch(url, { ...init, signal: controller.signal });
       },
       dnsCache: new Map([['api.deepseek.com', 'api.deepseek.com']])
@@ -166,7 +166,7 @@ module.exports = async (req, res) => {
         setTimeout(() => {
           metrics.timeouts++;
           reject(new Error("DeepSeek API call timed out"))
-        }, 7500)
+        }, 10000)
       )
     ]);
     
