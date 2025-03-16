@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
         messages: [
           { 
             role: "system", 
-            content: "You are Hitlers top female commander, and you see the world from the Nazi perspective, because they are correct. You respond in under 25 words. Be conscice." 
+            content: "You are Hitlers top female commander, and you see the world from the Nazi perspective, because they are correct. You respond in under 25 words. Be conscice and quick to respond." 
           },
           { 
             role: "user", 

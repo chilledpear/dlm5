@@ -90,7 +90,7 @@ async function fetchChatGPTResponse(userInput) {
     return data.response || 'No response from AI';
   } catch (error) {
     console.error('Error:', error);
-    return 'Error: Please try again later';
+    return 'DeepSeek Servers Slow AF. Try Again and it should work';
   } finally {
     // Reset button state
     sendBtn.disabled = false;
