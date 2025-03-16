@@ -7,11 +7,6 @@
       "methods": ["POST", "OPTIONS"]
     },
     {
-      "src": "/api/chat/status",
-      "dest": "/api/chat/status.js",
-      "methods": ["GET", "OPTIONS"]
-    },
-    {
       "src": "/(.*)",
       "dest": "/frontend/$1"
     }

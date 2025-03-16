@@ -1,6 +1,5 @@
-// Import the OpenAI SDK and Vercel KV
+// Import the OpenAI SDK
 const OpenAI = require('openai');
-const { kv } = require('@vercel/kv');
 require('dotenv').config();
 
 // Track request metrics for debugging
@@ -51,63 +50,11 @@ module.exports = async (req, res) => {
     
     console.log(`[${requestId}] Message length: ${req.body.message.length}`);
     
-    // Store the request in Vercel KV with 15-minute expiry
-    await kv.set(`chat:${requestId}`, {
-      status: 'pending',
-      message: req.body.message,
-      timestamp: Date.now()
-    }, { ex: 900 }); // 900 seconds = 15 minutes
-    
-    // Start processing in the background
-    processRequestInBackground(requestId);
-    
-    // Return immediately with the request ID
-    res.status(202).json({ 
-      requestId: requestId,
-      status: 'pending',
-      message: 'Request accepted and being processed'
-    });
-    
-    console.log(`[${requestId}] Request acknowledged in ${Date.now() - startTime}ms`);
-    
-  } catch (error) {
-    metrics.failedRequests++;
-    console.error(`[${requestId}] Error: ${error.message}`);
-    
-    let errorMessage = 'Error processing your request';
-    let statusCode = 500;
-    
-    // Handle specific error types
-    if (error.message.includes('too long')) {
-      errorMessage = 'Message too long (max 200 characters)';
-      statusCode = 400;
-    }
-    
-    // Return error response
-    res.status(statusCode).json({ error: errorMessage });
-    
-    console.log(`[${requestId}] Request failed with status ${statusCode} in ${Date.now() - startTime}ms`);
-  }
-};
-
-// Background processing function that doesn't block the response
-async function processRequestInBackground(requestId) {
-  const startTime = Date.now();
-  
-  try {
-    // Get the pending request from KV
-    const request = await kv.get(`chat:${requestId}`);
-    if (!request) {
-      throw new Error('Request not found in KV store');
-    }
-    
-    console.log(`[${requestId}] Starting background processing for message: ${request.message}`);
-    
     // Initialize OpenAI client with DeepSeek configuration
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 35000,  // 35 second timeout to stay under Vercel's limit
+      timeout: 45000,  // 45 second timeout
       maxRetries: 0    // No retries to avoid prolonging timeouts
     });
     
@@ -124,53 +71,67 @@ async function processRequestInBackground(requestId) {
           },
           { 
             role: "user", 
-            content: request.message 
+            content: req.body.message 
           }
         ],
-        temperature: 0.3,    // Lower temperature for faster responses
-        max_tokens: 100,     // Reduced tokens for faster responses
-        stream: false
+        temperature: 0.5,    // Lower temperature for faster, more deterministic responses
+        max_tokens: 150,     // Limited tokens for faster responses
+        stream: false        // Ensure streaming is disabled for faster response
       }),
-      // Custom timeout that rejects after 30 seconds
+      // Custom timeout that rejects after 40 seconds
       new Promise((_, reject) => 
         setTimeout(() => {
           metrics.timeouts++;
           reject(new Error("DeepSeek API call timed out"))
-        }, 30000)
+        }, 40000)
       )
     ]);
     
-    // Check for valid response
+    const responseTime = Date.now() - startTime;
+    console.log(`[${requestId}] API call completed in ${responseTime}ms`);
+    
+    // Validate the response
     if (!completion.choices || completion.choices.length === 0) {
       throw new Error("Invalid response from DeepSeek API");
     }
     
-    // Update the request in KV with the completed status and result
-    await kv.set(`chat:${requestId}`, {
-      status: 'completed',
-      result: completion.choices[0].message.content,
-      timestamp: Date.now(),
-      processingTime: Date.now() - startTime
-    }, { ex: 900 }); // Keep result for 15 minutes
-    
+    // Return successful response
     metrics.successfulRequests++;
-    console.log(`[${requestId}] Processing completed successfully in ${Date.now() - startTime}ms`);
+    res.status(200).json({ response: completion.choices[0].message.content });
+    
+    console.log(`[${requestId}] Request completed successfully in ${Date.now() - startTime}ms`);
+    console.log(`Metrics: ${JSON.stringify(metrics)}`);
     
   } catch (error) {
     metrics.failedRequests++;
-    
-    // Update the request with the error status
-    await kv.set(`chat:${requestId}`, {
-      status: 'error',
-      error: error.message || 'Unknown error',
-      timestamp: Date.now(),
-      processingTime: Date.now() - startTime
-    }, { ex: 900 });
-    
-    console.error(`[${requestId}] Processing error: ${error.message}`);
+    console.error(`[${requestId}] Error: ${error.message}`);
     
     if (error.status) {
       console.error(`[${requestId}] API Status Code: ${error.status}`);
     }
+    
+    let errorMessage = 'Error processing your request';
+    let statusCode = 500;
+    
+    // Handle specific error types
+    if (error.message.includes('timeout') || error.code === 'ETIMEDOUT') {
+      errorMessage = 'The AI service is taking too long to respond. Please try a shorter message or try again later.';
+      statusCode = 504;
+    } else if (error.status === 402) {
+      errorMessage = 'Account has insufficient balance. Please contact the administrator.';
+      statusCode = 402;
+    } else if (error.status === 429) {
+      errorMessage = 'Too many requests. Please try again later.';
+      statusCode = 429;
+    } else if (error.message.includes('too long')) {
+      errorMessage = 'Message too long (max 200 characters)';
+      statusCode = 400;
+    }
+    
+    // Return error response
+    res.status(statusCode).json({ error: errorMessage });
+    
+    console.log(`[${requestId}] Request failed with status ${statusCode} in ${Date.now() - startTime}ms`);
+    console.log(`Error metrics: ${JSON.stringify(metrics)}`);
   }
-}
+};

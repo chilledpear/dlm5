@@ -53,7 +53,6 @@ function sendMessage() {
       // Make sure to remove typing indicator even if there's an error
       removeTypingIndicator();
       displayMessage("Al16z", "Error: Please try again later");
-      console.error("Error fetching response:", error);
     });
   }
 }
@@ -75,10 +74,7 @@ async function fetchChatGPTResponse(userInput) {
   
   try {
     const baseUrl = window.location.origin;
-    
-    // Step 1: Initial request to start processing
-    console.log("Initiating chat request...");
-    const initResponse = await fetch(`${baseUrl}/api/chat`, {
+    const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -86,83 +82,19 @@ async function fetchChatGPTResponse(userInput) {
       body: JSON.stringify({ message: userInput })
     });
 
-    if (!initResponse.ok) {
-      throw new Error(`HTTP error! status: ${initResponse.status}`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
-    const initData = await initResponse.json();
-    
-    if (!initData.requestId) {
-      throw new Error('No request ID received from server');
-    }
-    
-    console.log(`Request initiated with ID: ${initData.requestId}`);
-    
-    // Step 2: Poll for results
-    const result = await pollForResult(initData.requestId);
-    return result;
-    
+    const data = await response.json();
+    return data.response || 'No response from AI';
   } catch (error) {
     console.error('Error:', error);
-    return `Error: ${error.message || 'Please try again later'}`;
+    return 'Error: Please try again later';
   } finally {
     // Reset button state
     sendBtn.disabled = false;
     sendBtn.textContent = 'Send';
     sendBtn.classList.remove('sending');
   }
-}
-
-async function pollForResult(requestId) {
-  const baseUrl = window.location.origin;
-  const maxAttempts = 45; // Poll for up to 45 seconds (at 1-second intervals)
-  let attempts = 0;
-  
-  console.log(`Starting to poll for results with request ID: ${requestId}`);
-  
-  while (attempts < maxAttempts) {
-    try {
-      // Wait 1 second between polling attempts
-      if (attempts > 0) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      attempts++;
-      console.log(`Polling attempt ${attempts}/${maxAttempts}`);
-      
-      const response = await fetch(`${baseUrl}/api/chat/status?requestId=${requestId}`);
-      
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.error("Request not found. It may have expired.");
-          throw new Error("Your request has expired or was not found. Please try again.");
-        } else {
-          console.error(`Status check failed with HTTP status: ${response.status}`);
-          throw new Error(`Status check failed: ${response.status}`);
-        }
-      }
-      
-      const data = await response.json();
-      console.log(`Poll result: status = ${data.status}`);
-      
-      // Check the status of the request
-      if (data.status === 'completed') {
-        console.log("Request completed successfully!");
-        return data.result;
-      } else if (data.status === 'error') {
-        console.error(`Request failed with error: ${data.error}`);
-        throw new Error(data.error || 'Processing failed on the server');
-      }
-      
-      // If we're here, the status is still 'pending', so we continue polling
-      
-    } catch (error) {
-      console.error('Polling error:', error);
-      throw error;
-    }
-  }
-  
-  // If we've hit the maximum number of attempts and still haven't received a result
-  console.error("Maximum polling attempts reached without getting a response");
-  throw new Error('Request processing timed out. Please try again with a shorter message.');
 }
