@@ -2,19 +2,11 @@
 const OpenAI = require('openai');
 const http = require('http');
 const { Resolver } = require('dns').promises;
-const { GPU } = require('gpu.js');
 require('dotenv').config();
 
 // DNS Optimization
 const resolver = new Resolver();
 resolver.setServers(['8.8.8.8', '1.1.1.1']); // Fastest DNS servers
-
-// GPU Acceleration setup (if available)
-const gpu = new GPU();
-const tokenizer = gpu.createKernel(function(text) {
-  // Hardware-accelerated token counting
-  return text.length / 4.5; // Approximate token count
-}).setOutput([1]);
 
 // Memory Pinning
 process.env.UV_THREADPOOL_SIZE = '1'; // Single-threaded processing
