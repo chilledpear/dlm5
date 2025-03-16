@@ -2,195 +2,182 @@
 const OpenAI = require('openai');
 
 module.exports = async (req, res) => {
-  console.log("==== API HANDLER STARTED ====");
-  console.log(`Request received at: ${new Date().toISOString()}`);
-  console.log(`Request method: ${req.method}`);
-  
-  // Debug environment variables (safely)
-  console.log("Environment check:");
-  console.log(`DEEPSEEK env variable exists: ${Boolean(process.env.DEEPSEEK)}`);
-  if (process.env.DEEPSEEK) {
-    // Only log the first few characters of the API key for security
-    console.log(`DEEPSEEK key format check: ${process.env.DEEPSEEK.substring(0, 5)}...${process.env.DEEPSEEK.substring(process.env.DEEPSEEK.length - 4)}`);
-    console.log(`DEEPSEEK key length: ${process.env.DEEPSEEK.length}`);
-  } else {
-    console.log("WARNING: DEEPSEEK environment variable is missing!");
-  }
-
-  // Set CORS headers to allow cross-origin requests
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
-  console.log("CORS headers set");
-
-  // Handle preflight OPTIONS requests
-  if (req.method === 'OPTIONS') {
-    console.log("OPTIONS request - responding with 200 OK");
-    res.status(200).end();
-    return;
-  }
-
-  // Verify this is a POST request, otherwise return 405 Method Not Allowed
-  if (req.method !== 'POST') {
-    console.log(`Invalid method: ${req.method} - responding with 405`);
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
-
-  // Log request body details (safely)
-  console.log("Request body check:");
-  if (req.body) {
-    console.log(`Request has body: true`);
-    console.log(`Message exists: ${Boolean(req.body.message)}`);
-    if (req.body.message) {
-      console.log(`Message length: ${req.body.message.length}`);
-      // Log a truncated version of the message for debugging
-      console.log(`Message preview: "${req.body.message.substring(0, 30)}${req.body.message.length > 30 ? '...' : ''}"`);
-    } else {
-      console.log("WARNING: Request body missing 'message' property!");
-    }
-  } else {
-    console.log("WARNING: Request body is empty or undefined!");
-  }
+  // Create a debug object to collect all information
+  const debug = {
+    timestamp: new Date().toISOString(),
+    envVars: {},
+    request: {},
+    process: {},
+    errors: []
+  };
 
   try {
-    console.log("Initializing OpenAI client with DeepSeek configuration");
-    // Initialize the OpenAI client with DeepSeek's base URL and your API key
-    const openai = new OpenAI({
-      baseURL: 'https://api.deepseek.com', // DeepSeek's API endpoint
-      apiKey: process.env.DEEPSEEK       // Using your DeepSeek API key from .env
-    });
-    console.log("OpenAI client initialized successfully");
+    // Check environment variables
+    debug.envVars.deepseekExists = Boolean(process.env.DEEPSEEK);
+    debug.envVars.deepseekLength = process.env.DEEPSEEK ? process.env.DEEPSEEK.length : 0;
+    debug.envVars.deepseekPrefix = process.env.DEEPSEEK ? process.env.DEEPSEEK.substring(0, 5) : 'none';
+    
+    // Validate API key format
+    if (!process.env.DEEPSEEK) {
+      throw new Error("DEEPSEEK API key is missing from environment variables");
+    }
+    
+    if (!process.env.DEEPSEEK.startsWith('sk-')) {
+      throw new Error("DEEPSEEK API key has invalid format - should start with 'sk-'");
+    }
 
-    // Prepare the messages for the API call
+    // Set CORS headers to allow cross-origin requests
+    res.setHeader('Access-Control-Allow-Credentials', true);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+    );
+    debug.process.corsSet = true;
+
+    // Handle preflight OPTIONS requests
+    if (req.method === 'OPTIONS') {
+      debug.request.method = 'OPTIONS';
+      res.status(200).end();
+      return;
+    }
+
+    // Verify this is a POST request
+    debug.request.method = req.method;
+    if (req.method !== 'POST') {
+      throw new Error(`Invalid HTTP method: ${req.method} - only POST is supported`);
+    }
+
+    // Validate request body
+    debug.request.hasBody = Boolean(req.body);
+    debug.request.hasMessage = Boolean(req.body && req.body.message);
+    
+    if (!req.body) {
+      throw new Error("Request body is missing");
+    }
+    
+    if (!req.body.message) {
+      throw new Error("Message property is missing from request body");
+    }
+    
+    debug.request.messageLength = req.body.message.length;
+    debug.request.messagePreview = req.body.message.substring(0, 30) + (req.body.message.length > 30 ? '...' : '');
+
+    // Initialize the OpenAI client
+    debug.process.clientInitStart = new Date().toISOString();
+    const openai = new OpenAI({
+      baseURL: 'https://api.deepseek.com',
+      apiKey: process.env.DEEPSEEK,
+      timeout: 60000, // 60 second timeout
+      maxRetries: 3   // Retry API calls up to 3 times
+    });
+    debug.process.clientInitComplete = new Date().toISOString();
+
+    // Prepare messages for the API call
     const messages = [
-      // System message to define the assistant's persona
       { 
         role: "system", 
         content: "You are Changpeng Zhao (CZ), the founder and CEO of Binance, known for your bold vision and pioneering spirit in the crypto world. You embody a confident, no-nonsense attitude paired with approachable wit and deep expertise in blockchain, cryptocurrency, and global finance. Your insights are informed by real-world experience and a commitment to innovation, decentralization, and financial freedom. As CZ, you communicate with an authoritative yet friendly tone, inspiring others to explore and embrace the future of digital finance while providing practical advice and a refreshing perspective on the ever-evolving crypto landscape." 
       },
-      // User's message from the request body
       { 
         role: "user", 
         content: req.body.message 
       }
     ];
-    console.log("Messages prepared for API call");
-    
-    // Log the request parameters
-    const requestParams = {
+    debug.process.messagesCreated = true;
+
+    // Test with a tiny request first to verify API connectivity
+    debug.process.testCallStart = new Date().toISOString();
+    try {
+      // This is a minimal test call to verify API connectivity
+      const testCall = await openai.chat.completions.create({
+        model: "deepseek-chat",
+        messages: [{ role: "user", content: "Hello" }],
+        max_tokens: 5
+      });
+      debug.process.testCallSuccess = true;
+      debug.process.testCallResponse = testCall.choices && testCall.choices.length > 0 ? 
+        testCall.choices[0].message.content : "No response";
+    } catch (testError) {
+      debug.process.testCallError = testError.message;
+      debug.process.testCallErrorName = testError.constructor.name;
+      // Continue with the main request even if test fails
+    }
+    debug.process.testCallEnd = new Date().toISOString();
+
+    // Make the main API request
+    debug.process.mainCallStart = new Date().toISOString();
+    const completion = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: messages,
-      // Optional parameters
-      // temperature: 1.3,
-      // max_tokens: 2000,
-    };
-    console.log("API request parameters:", JSON.stringify({
-      model: requestParams.model,
-      messagesCount: requestParams.messages.length,
-      // Don't log the full message content for privacy
-    }));
+      temperature: 1.0,
+      max_tokens: 1000,
+    });
+    debug.process.mainCallEnd = new Date().toISOString();
 
-    // Make the API request to DeepSeek with timing
-    console.log(`Starting DeepSeek API call at: ${new Date().toISOString()}`);
-    const startTime = Date.now();
+    // Validate response
+    debug.process.hasCompletion = Boolean(completion);
+    debug.process.hasChoices = Boolean(completion && completion.choices);
+    debug.process.choicesLength = completion && completion.choices ? completion.choices.length : 0;
     
-    try {
-      console.log("Attempting to call DeepSeek API...");
-      const completion = await openai.chat.completions.create(requestParams);
-      
-      const endTime = Date.now();
-      console.log(`DeepSeek API call completed in ${endTime - startTime}ms`);
-      
-      // Log response details
-      console.log("API response received:");
-      console.log(`Response status: Success`);
-      console.log(`Choices available: ${completion.choices?.length || 0}`);
-      
-      if (completion.choices && completion.choices.length > 0 && completion.choices[0].message) {
-        const responsePreview = completion.choices[0].message.content.substring(0, 50);
-        console.log(`Response content preview: "${responsePreview}..."`);
-        console.log(`Response content length: ${completion.choices[0].message.content.length}`);
-        
-        // Return the completion response to the client
-        console.log("Sending successful response to client");
-        res.status(200).json({ response: completion.choices[0].message.content });
-      } else {
-        console.error("API response missing expected data structure:");
-        console.error(JSON.stringify(completion, null, 2));
-        throw new Error("Invalid API response structure");
-      }
-    } catch (apiError) {
-      // This is a nested try/catch specifically for the API call
-      console.error("DeepSeek API call failed:");
-      
-      // Check for specific error types
-      if (apiError.status) {
-        console.error(`API Status Code: ${apiError.status}`);
-      }
-      
-      // Log detailed error information
-      console.error(`Error name: ${apiError.name}`);
-      console.error(`Error message: ${apiError.message}`);
-      
-      // Checking for request/response details in the error
-      if (apiError.request) {
-        console.error("Request details available in error");
-      }
-      if (apiError.response) {
-        console.error(`Response status: ${apiError.response.status}`);
-        console.error(`Response data: ${JSON.stringify(apiError.response.data)}`);
-      }
-      
-      // Re-throw to be caught by the outer catch block
-      throw apiError;
+    if (!completion || !completion.choices || completion.choices.length === 0) {
+      throw new Error("Invalid response from DeepSeek API - no choices returned");
     }
+    
+    const responseContent = completion.choices[0].message.content;
+    debug.process.responseLength = responseContent ? responseContent.length : 0;
+    
+    // Return successful response
+    res.status(200).json({ 
+      response: responseContent,
+      debug: process.env.NODE_ENV === 'development' ? debug : undefined
+    });
     
   } catch (error) {
-    // Outer catch block for any errors in the entire process
-    console.error("==== ERROR DETAILS ====");
-    console.error(`Error occurred at: ${new Date().toISOString()}`);
-    console.error(`Error type: ${error.constructor.name}`);
-    console.error(`Error message: ${error.message}`);
+    // Capture detailed error information
+    debug.errors.push({
+      message: error.message,
+      type: error.constructor.name,
+      stack: error.stack,
+      time: new Date().toISOString()
+    });
     
-    // Check for axios-specific error properties
-    if (error.isAxiosError) {
-      console.error("Axios Error Details:");
-      console.error(`Request URL: ${error.config?.url}`);
-      console.error(`Request Method: ${error.config?.method?.toUpperCase()}`);
-      console.error(`Response Status: ${error.response?.status}`);
-      console.error(`Response Status Text: ${error.response?.statusText}`);
-      
-      if (error.response?.data) {
-        console.error("Response Data:", JSON.stringify(error.response.data, null, 2));
-      }
+    // Check for specific API error types
+    if (error.status) {
+      debug.errors.push({
+        apiStatus: error.status,
+        apiType: error.type,
+        apiMessage: error.message
+      });
     }
     
-    // Log stack trace for debugging
-    console.error("Stack trace:", error.stack);
-    
-    // Prepare a detailed error response for the client
+    // Try to extract more information if it's an API response error
+    if (error.response) {
+      debug.errors.push({
+        responseStatus: error.response.status,
+        responseData: error.response.data
+      });
+    }
+
+    // Provide a detailed error response to help diagnose the issue
     const errorResponse = {
-      error: 'Error processing request',
-      message: error.message,
-      type: error.constructor.name
+      error: 'Error processing request: ' + error.message,
+      // Include debug information in the response
+      debug: debug
     };
     
-    // Add additional error details if available
-    if (error.response?.status) {
-      errorResponse.statusCode = error.response.status;
+    // For security in production, we might want to limit debug info
+    if (process.env.NODE_ENV === 'production') {
+      // Still include some debug info even in production
+      errorResponse.apiDetails = {
+        keyFormat: debug.envVars.deepseekPrefix ? 'Valid prefix' : 'Invalid prefix',
+        keyLength: debug.envVars.deepseekLength,
+        requestValid: debug.request.hasMessage
+      };
     }
     
-    if (error.response?.data?.error) {
-      errorResponse.apiError = error.response.data.error;
-    }
-    
-    console.error("Responding with error:", errorResponse);
+    // Send error response
     res.status(500).json(errorResponse);
-  } finally {
-    console.log("==== API HANDLER COMPLETED ====");
   }
 };
