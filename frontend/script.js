@@ -11,7 +11,7 @@ function showTypingIndicator() {
   const chatDisplay = document.getElementById("chat-display");
   const typingIndicator = document.createElement("div");
   typingIndicator.id = "typing-indicator";
-  typingIndicator.innerHTML = `<strong>Reich Officer:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
+  typingIndicator.innerHTML = `<strong>Officer:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
   chatDisplay.appendChild(typingIndicator);
   chatDisplay.scrollTop = chatDisplay.scrollHeight;
 }
@@ -24,6 +24,12 @@ function removeTypingIndicator() {
   }
 }
 
+// Pre-tokenization for client-side validation
+function countTokens(text) {
+  // Simple approximation - 1 token is roughly 4 characters in English
+  return Math.ceil(text.length / 4);
+}
+
 function sendMessage() {
   const userInput = document.getElementById("user-input").value;
   
@@ -33,13 +39,20 @@ function sendMessage() {
     return;
   }
   
+  // Pre-Tokenization (Client-Side)
+  const messageTokens = countTokens(userInput);
+  if (messageTokens > 25) { // 25 tokens ≈ 100 characters
+    alert('Message too long (max 25 tokens)');
+    return;
+  }
+  
   if (userInput.length > 70) {
     alert('Message too long (max 70 characters)');
     return;
   }
   
   if (userInput.trim() !== "") {
-    displayMessage("Disciple of Hitler", userInput);
+    displayMessage("Disciple of ", userInput);
     document.getElementById("user-input").value = "";
 
     // Show typing indicator immediately after user message
@@ -48,11 +61,11 @@ function sendMessage() {
     fetchChatGPTResponse(userInput).then((response) => {
       // Remove typing indicator before showing the response
       removeTypingIndicator();
-      displayMessage("Reich Officer", response);
+      displayMessage(" Officer", response);
     }).catch(error => {
       // Make sure to remove typing indicator even if there's an error
       removeTypingIndicator();
-      displayMessage("Reich Officer", "Error: Please try again later");
+      displayMessage(" Officer", "Error: Please try again later");
     });
   }
 }
@@ -73,6 +86,7 @@ async function fetchChatGPTResponse(userInput) {
   sendBtn.classList.add('sending');
   
   try {
+    const startTime = performance.now();
     const baseUrl = window.location.origin;
     const response = await fetch(`${baseUrl}/api/chat`, {
       method: 'POST',
@@ -81,6 +95,9 @@ async function fetchChatGPTResponse(userInput) {
       },
       body: JSON.stringify({ message: userInput })
     });
+
+    const endTime = performance.now();
+    console.log(`Request took ${endTime - startTime}ms to complete`);
 
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
