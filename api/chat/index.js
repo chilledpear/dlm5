@@ -54,7 +54,7 @@ module.exports = async (req, res) => {
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 45000,  // 45 second timeout
+      timeout: 10000,  // 45 second timeout
       maxRetries: 0    // No retries to avoid prolonging timeouts
     });
     
@@ -74,8 +74,8 @@ module.exports = async (req, res) => {
             content: req.body.message 
           }
         ],
-        temperature: 0.5,    // Lower temperature for faster, more deterministic responses
-        max_tokens: 150,     // Limited tokens for faster responses
+        temperature: 0.1,    // Lower temperature for faster, more deterministic responses
+        max_tokens: 100,     // Limited tokens for faster responses
         stream: false        // Ensure streaming is disabled for faster response
       }),
       // Custom timeout that rejects after 40 seconds
@@ -83,7 +83,7 @@ module.exports = async (req, res) => {
         setTimeout(() => {
           metrics.timeouts++;
           reject(new Error("DeepSeek API call timed out"))
-        }, 40000)
+        }, 10000)
       )
     ]);
     
