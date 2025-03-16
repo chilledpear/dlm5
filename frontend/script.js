@@ -33,8 +33,8 @@ function sendMessage() {
     return;
   }
   
-  if (userInput.length > 100) {
-    alert('Message too long (max 100 characters)');
+  if (userInput.length > 70) {
+    alert('Message too long (max 70 characters)');
     return;
   }
   
