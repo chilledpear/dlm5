@@ -11,7 +11,7 @@ function showTypingIndicator() {
   const chatDisplay = document.getElementById("chat-display");
   const typingIndicator = document.createElement("div");
   typingIndicator.id = "typing-indicator";
-  typingIndicator.innerHTML = `<strong>Al16z:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
+  typingIndicator.innerHTML = `<strong>Reich Officer:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
   chatDisplay.appendChild(typingIndicator);
   chatDisplay.scrollTop = chatDisplay.scrollHeight;
 }
