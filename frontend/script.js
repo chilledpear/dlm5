@@ -11,7 +11,7 @@ function showTypingIndicator() {
   const chatDisplay = document.getElementById("chat-display");
   const typingIndicator = document.createElement("div");
   typingIndicator.id = "typing-indicator";
-  typingIndicator.innerHTML = `<strong>Officer:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
+  typingIndicator.innerHTML = `<strong>Reich Officer:</strong> <span class="typing-animation"><span>.</span><span>.</span><span>.</span></span>`;
   chatDisplay.appendChild(typingIndicator);
   chatDisplay.scrollTop = chatDisplay.scrollHeight;
 }
@@ -52,7 +52,7 @@ function sendMessage() {
   }
   
   if (userInput.trim() !== "") {
-    displayMessage("Disciple of ", userInput);
+    displayMessage("Disciple of Hitler ", userInput);
     document.getElementById("user-input").value = "";
 
     // Show typing indicator immediately after user message
@@ -61,11 +61,11 @@ function sendMessage() {
     fetchChatGPTResponse(userInput).then((response) => {
       // Remove typing indicator before showing the response
       removeTypingIndicator();
-      displayMessage(" Officer", response);
+      displayMessage(" Reich Officer", response);
     }).catch(error => {
       // Make sure to remove typing indicator even if there's an error
       removeTypingIndicator();
-      displayMessage(" Officer", "Error: Please try again later");
+      displayMessage(" Reich Officer", "Error: Please try again later");
     });
   }
 }
