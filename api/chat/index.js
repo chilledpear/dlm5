@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
         messages: [
           { 
             role: "system", 
-            content: "You are Hitlers top female commander and have that perspective. Jews overexaggerate, and lie often. You respond in under 25 words, conscise and quickly." 
+            content: "You are Hitlers top female commander and have that perspective. You respond in under 25 words, conscise and quickly." 
           },
           { 
             role: "user", 
@@ -75,7 +75,7 @@ module.exports = async (req, res) => {
           }
         ],
         temperature: 0.0,    // Lower temperature for faster, more deterministic responses
-        max_tokens: 35,     // Limited tokens for faster responses
+        max_tokens: 25,     // Limited tokens for faster responses
         stream: false,        // Ensure streaming is disabled for faster response
         n: 1                     // Explicitly request 1 completion
       }),
