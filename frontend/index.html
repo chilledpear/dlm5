@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BLM</title>
+  
+  <!-- Favicon updated for The Strategist -->
+  <link id="favicon" rel="icon" type="image/jpeg" href="strategist-favicon.jpg" />
+  
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="light-mode">
+  <!-- TOP MENU: Slim bar with social links -->
+
+  <div class="container">
+    <div class="title-container">
+      <div class="image-text">Al16z</div>
+      <div class="image-text2">
+        Allegedly it's 6 Million Jews
+      </div>
+      <div class="contract-text">
+        Contract Address: Soon
+      </div>
+    </div>
+
+    <!-- CENTER IMAGE: Replacing video with an image -->
+    <div class="image-box">
+      <img id="center-image" src="stepsis.jpg" alt="Stepsis AI" class="center-image">
+    </div>
+
+    <!-- CHAT BOX SECTION -->
+    <div class="chat-box">
+      <div id="chat-display" class="chat-display"></div>
+      <div class="input-container">
+        <input type="text" id="user-input" placeholder="Type your message...">
+        <button id="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Play dog barking sound on page load -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      var barkSound = new Audio('bark.mp3');
+      barkSound.play().catch(function(error) {
+        console.error('Audio playback failed:', error);
+      });
+    });
+  </script>
+
+  <script src="script.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,225 @@
+/* RESET & BASE */ 
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+html, body {
+  width: 100%;
+  font-family: Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* LIGHT MODE (only mode) */
+body {
+  background-color: #ff0000;
+  color: #333;
+  cursor: url("strategist-cursor-light.png"), auto;
+}
+
+/* SLIM MENU */
+.slim-menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+/* SOCIAL LINKS */
+.social-links {
+  display: flex;
+  gap: 10px;
+  background-color: #000;
+  padding: 5px 10px;
+  border: 2px solid #444;
+  border-radius: 5px;
+}
+.social-links a img {
+  width: 24px;
+  height: 24px;
+  display: block;
+}
+
+/* CONTAINER */
+.container {
+  width: 100%;
+  max-width: 800px;
+  padding: 20px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center; /* Center all children */
+}
+
+/* TITLE CONTAINER */
+.title-container {
+  text-align: center;
+}
+.image-text {
+  font-size: 50px;
+  font-weight: bold;
+  color: #ffffff;
+  text-shadow: 
+    -3px -3px 0 #000000,
+     3px -3px 0 #000000,
+    -3px  3px 0 #000000,
+     3px  3px 0 #000000;
+  animation: float 3s ease-in-out infinite;
+}
+.image-text2 {
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1.2;
+  color: #ffffff;
+  text-shadow: 
+    -2px -2px 0 #000000,
+     2px -2px 0 #000000,
+    -2px  2px 0 #000000,
+     2px  2px 0 #000000;
+  animation: float 3s ease-in-out infinite;
+}
+.contract-text {
+  font-size: 20px;
+  margin-top: 5px;
+  color: #ffffff;
+  text-shadow: 
+    -2px -2px 0 #000000,
+     2px -2px 0 #000000,
+    -2px  2px 0 #000000,
+     2px  2px 0 #000000;
+  animation: float 3s ease-in-out infinite;
+}
+
+/* IMAGE BOX */
+.image-box {
+  width: 100%;
+  margin: 0 auto;
+}
+.center-image {
+  width: 100%;
+  max-width: 500px;
+  height: auto;
+  border: 4px solid currentColor;
+  border-radius: 5px;
+  display: block;
+  margin: 0 auto;
+  /* Fade in once over 2s, then continuously float */
+  animation: fadeIn 2s ease-in forwards, float 3s ease-in-out infinite;
+}
+
+/* CHAT BOX */
+.chat-box {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  align-self: center;
+  border-radius: 10px;
+  padding: 20px;
+  background-color: #525252;
+  border: 3px solid #000000;
+  color: #333;
+  animation: float 3s ease-in-out infinite;
+}
+.chat-display {
+  height: 200px;
+  overflow-y: auto;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  background-color: #fff;
+}
+.chat-display > div {
+  margin-bottom: 15px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: #eee;
+}
+
+/* INPUT CONTAINER */
+.input-container {
+  display: flex;
+  gap: 10px;
+}
+#user-input {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 5px;
+  outline: none;
+  background-color: #ddd;
+  color: #333;
+}
+#send-btn {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+  background-color: #ff0000;
+  color: #fff;
+}
+#send-btn:hover {
+  background-color: #ff0000;
+}
+
+/* MOBILE RESPONSIVENESS */
+@media screen and (max-width: 768px) {
+  .container {
+    padding: 15px;
+    gap: 15px;
+  }
+  .center-image {
+    max-width: 300px;
+  }
+}
+@media screen and (max-width: 480px) {
+  .container {
+    padding: 10px;
+    gap: 10px;
+  }
+  .center-image {
+    max-width: 200px;
+  }
+}
+
+/* Animated Background with Emojis */
+/* Animated Background with PNG */
+body {
+  background-image: url("emoji.png");
+  background-repeat: space; /* This automatically adds space between images */
+  background-size: 100px 100px;
+  animation: moveEmojis 4s linear infinite;
+}
+
+@keyframes moveEmojis {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: -150px 0;
+  }
+}
+
+/* Floating effect for elements */
+@keyframes float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-15px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* Fade in effect for center image */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
