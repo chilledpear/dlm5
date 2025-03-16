@@ -9,11 +9,11 @@ document.getElementById("send-btn").addEventListener("click", sendMessage);
 function sendMessage() {
   const userInput = document.getElementById("user-input").value;
   if (userInput.trim() !== "") {
-    displayMessage("Allied Power", userInput);
+    displayMessage("Degen", userInput);
     document.getElementById("user-input").value = "";
 
     fetchChatGPTResponse(userInput).then((response) => {
-      displayMessage("Reich Officer", response);
+      displayMessage("Al16z", response);
     });
   }
 }
@@ -42,9 +42,9 @@ async function fetchChatGPTResponse(userInput) {
     }
     
     const data = await response.json();
-    return data.response;
+    return data.response || 'No response from AI';
   } catch (error) {
     console.error('Error:', error);
-    return 'try again capitalist scum';
+    return 'Error: Please try again later';  // Updated error message
   }
 }

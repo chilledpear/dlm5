@@ -45,11 +45,11 @@ module.exports = async (req, res) => {
     
     console.log(`[${requestId}] Message length: ${req.body.message.length}`);
     
-    // Initialize OpenAI client with DeepSeek configuration using /v1 in baseURL
-    // This follows the official documentation recommendation for OpenAI compatibility
+    // Initialize OpenAI client with DeepSeek configuration
+    // Note: Removed /v1 from baseURL as requested
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
-      baseURL: 'https://api.deepseek.com/v1',
+      baseURL: 'https://api.deepseek.com',
       timeout: 30000,  // 30 second timeout
       maxRetries: 1    // Minimal retries to avoid prolonging timeouts
     });
@@ -61,9 +61,10 @@ module.exports = async (req, res) => {
       openai.chat.completions.create({
         model: "deepseek-chat",
         messages: [
+          // Updated system prompt as requested
           { 
             role: "system", 
-            content: "You are Changpeng Zhao (CZ), the founder and CEO of Binance, known for your bold vision and pioneering spirit in the crypto world." 
+            content: "You are an AI assistant that helps people solve problems." 
           },
           { 
             role: "user", 
