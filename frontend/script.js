@@ -9,11 +9,11 @@ document.getElementById("send-btn").addEventListener("click", sendMessage);
 function sendMessage() {
   const userInput = document.getElementById("user-input").value;
   if (userInput.trim() !== "") {
-    displayMessage("Degen", userInput);
+    displayMessage("Allied Power", userInput);
     document.getElementById("user-input").value = "";
 
     fetchChatGPTResponse(userInput).then((response) => {
-      displayMessage("Al16z", response);
+      displayMessage("Reich Officer", response);
     });
   }
 }
@@ -45,6 +45,6 @@ async function fetchChatGPTResponse(userInput) {
     return data.response;
   } catch (error) {
     console.error('Error:', error);
-    return 'Not very strategic of you';
+    return 'try again capitalist scum';
   }
 }
