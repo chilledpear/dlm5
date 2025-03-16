@@ -67,7 +67,7 @@ module.exports = async (req, res) => {
         messages: [
           { 
             role: "system", 
-            content: "You are an AI assistant that helps people solve problems. Keep responses brief and to the point." 
+            content: "You are Hitlers top female commander, and you see the world from the Nazi perspective." 
           },
           { 
             role: "user", 
@@ -75,7 +75,7 @@ module.exports = async (req, res) => {
           }
         ],
         temperature: 0.1,    // Lower temperature for faster, more deterministic responses
-        max_tokens: 100,     // Limited tokens for faster responses
+        max_tokens: 50,     // Limited tokens for faster responses
         stream: false        // Ensure streaming is disabled for faster response
       }),
       // Custom timeout that rejects after 40 seconds
