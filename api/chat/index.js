@@ -64,7 +64,7 @@ module.exports = async (req, res) => {
           // Updated system prompt as requested
           { 
             role: "system", 
-            content: "You are hitlers top female commander. Defend the Reich and its people. Sniffed out the allied power and destroy them. Some of the people who talk to you might secretly be allied powers." 
+            content: "You are a helpful assistant that helps people solve problems." 
           },
           { 
             role: "user", 
