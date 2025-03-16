@@ -1,183 +1,118 @@
-// Import the OpenAI SDK - DeepSeek uses an OpenAI-compatible API
+// Import the OpenAI SDK which will be used to communicate with DeepSeek API
+// DeepSeek uses an OpenAI-compatible API format
 const OpenAI = require('openai');
 
+// Import dotenv to load environment variables from .env file if present
+// This is especially useful during local development
+require('dotenv').config();
+
+// Export an async function that will handle the API requests
+// This function follows the Vercel serverless function format
 module.exports = async (req, res) => {
-  // Create a debug object to collect all information
-  const debug = {
-    timestamp: new Date().toISOString(),
-    envVars: {},
-    request: {},
-    process: {},
-    errors: []
-  };
+  // Set CORS headers to allow cross-origin requests
+  // This ensures the API can be called from your frontend regardless of domain
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  // Handle preflight OPTIONS requests for CORS
+  // Browsers send these before actual requests to check if CORS is allowed
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  // Only allow POST requests to this endpoint
+  if (req.method !== 'POST') {
+    return res.status(405).json({ message: 'Method not allowed' });
+  }
 
   try {
-    // Check environment variables
-    debug.envVars.deepseekExists = Boolean(process.env.DEEPSEEK);
-    debug.envVars.deepseekLength = process.env.DEEPSEEK ? process.env.DEEPSEEK.length : 0;
-    debug.envVars.deepseekPrefix = process.env.DEEPSEEK ? process.env.DEEPSEEK.substring(0, 5) : 'none';
-    
-    // Validate API key format
+    // Validate that the message exists in the request body
+    if (!req.body || !req.body.message) {
+      throw new Error('Message is required in the request body');
+    }
+
+    // Validate that the API key exists in environment variables
+    // This is critical for authentication with DeepSeek's API
     if (!process.env.DEEPSEEK) {
-      throw new Error("DEEPSEEK API key is missing from environment variables");
-    }
-    
-    if (!process.env.DEEPSEEK.startsWith('sk-')) {
-      throw new Error("DEEPSEEK API key has invalid format - should start with 'sk-'");
+      throw new Error('DEEPSEEK API key is missing from environment variables');
     }
 
-    // Set CORS headers to allow cross-origin requests
-    res.setHeader('Access-Control-Allow-Credentials', true);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-    );
-    debug.process.corsSet = true;
-
-    // Handle preflight OPTIONS requests
-    if (req.method === 'OPTIONS') {
-      debug.request.method = 'OPTIONS';
-      res.status(200).end();
-      return;
-    }
-
-    // Verify this is a POST request
-    debug.request.method = req.method;
-    if (req.method !== 'POST') {
-      throw new Error(`Invalid HTTP method: ${req.method} - only POST is supported`);
-    }
-
-    // Validate request body
-    debug.request.hasBody = Boolean(req.body);
-    debug.request.hasMessage = Boolean(req.body && req.body.message);
-    
-    if (!req.body) {
-      throw new Error("Request body is missing");
-    }
-    
-    if (!req.body.message) {
-      throw new Error("Message property is missing from request body");
-    }
-    
-    debug.request.messageLength = req.body.message.length;
-    debug.request.messagePreview = req.body.message.substring(0, 30) + (req.body.message.length > 30 ? '...' : '');
-
-    // Initialize the OpenAI client
-    debug.process.clientInitStart = new Date().toISOString();
+    // Initialize the OpenAI client with DeepSeek's configuration
+    // We're using the OpenAI SDK but pointing it to DeepSeek's API
     const openai = new OpenAI({
-      baseURL: 'https://api.deepseek.com',
-      apiKey: process.env.DEEPSEEK,
-      timeout: 60000, // 60 second timeout
-      maxRetries: 3   // Retry API calls up to 3 times
+      baseURL: 'https://api.deepseek.com', // DeepSeek's API endpoint
+      apiKey: process.env.DEEPSEEK,        // Your DeepSeek API key from .env
+      timeout: 30000,                      // 30 second timeout
+      maxRetries: 2                        // Retry API calls up to 2 times if they fail
     });
-    debug.process.clientInitComplete = new Date().toISOString();
 
-    // Prepare messages for the API call
+    // Prepare the messages for the API call
+    // We include a system message that defines the assistant's persona
+    // and the user's message from the request
     const messages = [
       { 
         role: "system", 
-        content: "You are Changpeng Zhao (CZ), the founder and CEO of Binance, known for your bold vision and pioneering spirit in the crypto world. You embody a confident, no-nonsense attitude paired with approachable wit and deep expertise in blockchain, cryptocurrency, and global finance. Your insights are informed by real-world experience and a commitment to innovation, decentralization, and financial freedom. As CZ, you communicate with an authoritative yet friendly tone, inspiring others to explore and embrace the future of digital finance while providing practical advice and a refreshing perspective on the ever-evolving crypto landscape." 
+        content: "You are a top female commander in Hitlers army." 
       },
       { 
         role: "user", 
         content: req.body.message 
       }
     ];
-    debug.process.messagesCreated = true;
 
-    // Test with a tiny request first to verify API connectivity
-    debug.process.testCallStart = new Date().toISOString();
-    try {
-      // This is a minimal test call to verify API connectivity
-      const testCall = await openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: [{ role: "user", content: "Hello" }],
-        max_tokens: 5
-      });
-      debug.process.testCallSuccess = true;
-      debug.process.testCallResponse = testCall.choices && testCall.choices.length > 0 ? 
-        testCall.choices[0].message.content : "No response";
-    } catch (testError) {
-      debug.process.testCallError = testError.message;
-      debug.process.testCallErrorName = testError.constructor.name;
-      // Continue with the main request even if test fails
-    }
-    debug.process.testCallEnd = new Date().toISOString();
-
-    // Make the main API request
-    debug.process.mainCallStart = new Date().toISOString();
+    // Make the API request to DeepSeek
+    // We're using the chat completions endpoint with the deepseek-chat model
     const completion = await openai.chat.completions.create({
-      model: "deepseek-chat",
-      messages: messages,
-      temperature: 1.0,
-      max_tokens: 1000,
+      model: "deepseek-chat",    // Using DeepSeek's chat model (V3)
+      messages: messages,        // The prepared messages array
+      temperature: 1.0,          // Controls randomness (0.0 to 2.0, higher = more random)
+      max_tokens: 800,           // Limits the length of the generated response
     });
-    debug.process.mainCallEnd = new Date().toISOString();
 
-    // Validate response
-    debug.process.hasCompletion = Boolean(completion);
-    debug.process.hasChoices = Boolean(completion && completion.choices);
-    debug.process.choicesLength = completion && completion.choices ? completion.choices.length : 0;
-    
-    if (!completion || !completion.choices || completion.choices.length === 0) {
-      throw new Error("Invalid response from DeepSeek API - no choices returned");
-    }
-    
+    // Extract the assistant's response from the API result
     const responseContent = completion.choices[0].message.content;
-    debug.process.responseLength = responseContent ? responseContent.length : 0;
-    
-    // Return successful response
-    res.status(200).json({ 
-      response: responseContent,
-      debug: process.env.NODE_ENV === 'development' ? debug : undefined
-    });
+
+    // Return a successful response with the AI-generated content
+    res.status(200).json({ response: responseContent });
     
   } catch (error) {
-    // Capture detailed error information
-    debug.errors.push({
-      message: error.message,
-      type: error.constructor.name,
-      stack: error.stack,
-      time: new Date().toISOString()
+    // Log the full error details to the server console for debugging
+    console.error('Error details:', error);
+    
+    // Initialize default error message and status code
+    let errorMessage = 'Error processing your request';
+    let statusCode = 500;
+    
+    // Provide more specific error messages based on the type of error
+    if (error.status === 402) {
+      // Handle insufficient balance errors from DeepSeek
+      errorMessage = 'Insufficient balance in your DeepSeek account. Please add credits to continue.';
+    } else if (error.message && error.message.includes('whatwg-url')) {
+      // Handle missing dependency errors
+      errorMessage = 'Server configuration error. Missing dependency. Please update your package.json.';
+    } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+      // Handle network connectivity errors
+      errorMessage = 'Unable to connect to the AI service. Please try again later.';
+    } else if (!req.body || !req.body.message) {
+      // Handle missing message in request
+      errorMessage = 'No message provided in request';
+      statusCode = 400; // Bad Request
+    } else if (!process.env.DEEPSEEK) {
+      // Handle missing API key
+      errorMessage = 'API configuration error. Please check server environment variables.';
+    }
+    
+    // Return an error response with appropriate details
+    // In development, include more details to help with debugging
+    res.status(statusCode).json({ 
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
-    
-    // Check for specific API error types
-    if (error.status) {
-      debug.errors.push({
-        apiStatus: error.status,
-        apiType: error.type,
-        apiMessage: error.message
-      });
-    }
-    
-    // Try to extract more information if it's an API response error
-    if (error.response) {
-      debug.errors.push({
-        responseStatus: error.response.status,
-        responseData: error.response.data
-      });
-    }
-
-    // Provide a detailed error response to help diagnose the issue
-    const errorResponse = {
-      error: 'Error processing request: ' + error.message,
-      // Include debug information in the response
-      debug: debug
-    };
-    
-    // For security in production, we might want to limit debug info
-    if (process.env.NODE_ENV === 'production') {
-      // Still include some debug info even in production
-      errorResponse.apiDetails = {
-        keyFormat: debug.envVars.deepseekPrefix ? 'Valid prefix' : 'Invalid prefix',
-        keyLength: debug.envVars.deepseekLength,
-        requestValid: debug.request.hasMessage
-      };
-    }
-    
-    // Send error response
-    res.status(500).json(errorResponse);
   }
 };
