@@ -2,6 +2,13 @@
 const OpenAI = require('openai');
 require('dotenv').config();
 
+// Initialize global storage for pending requests
+// Note: This is for demonstration purposes only
+// In production, use a persistent storage solution like Redis, MongoDB, etc.
+if (!global.pendingRequests) {
+  global.pendingRequests = {};
+}
+
 // Track request metrics for debugging
 const metrics = {
   totalRequests: 0,
@@ -10,6 +17,7 @@ const metrics = {
   timeouts: 0
 };
 
+// Main handler function for the /api/chat endpoint
 module.exports = async (req, res) => {
   const requestId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
   const startTime = Date.now();
@@ -50,11 +58,64 @@ module.exports = async (req, res) => {
     
     console.log(`[${requestId}] Message length: ${req.body.message.length}`);
     
+    // Store the request in our global storage
+    global.pendingRequests[requestId] = {
+      status: 'pending',
+      message: req.body.message,
+      timestamp: Date.now()
+    };
+    
+    // Start processing in the background
+    // This won't block the response
+    processRequestInBackground(requestId);
+    
+    // Return immediately with the request ID
+    res.status(202).json({ 
+      requestId: requestId,
+      status: 'pending',
+      message: 'Request accepted and being processed'
+    });
+    
+    console.log(`[${requestId}] Request acknowledged in ${Date.now() - startTime}ms`);
+    
+  } catch (error) {
+    metrics.failedRequests++;
+    console.error(`[${requestId}] Error: ${error.message}`);
+    
+    let errorMessage = 'Error processing your request';
+    let statusCode = 500;
+    
+    // Handle specific error types
+    if (error.message.includes('too long')) {
+      errorMessage = 'Message too long (max 200 characters)';
+      statusCode = 400;
+    }
+    
+    // Return error response
+    res.status(statusCode).json({ error: errorMessage });
+    
+    console.log(`[${requestId}] Request failed with status ${statusCode} in ${Date.now() - startTime}ms`);
+  }
+};
+
+// Background processing function that doesn't block the response
+async function processRequestInBackground(requestId) {
+  const startTime = Date.now();
+  
+  try {
+    // Get the pending request
+    const request = global.pendingRequests[requestId];
+    if (!request) {
+      throw new Error('Request not found');
+    }
+    
+    console.log(`[${requestId}] Starting background processing for message: ${request.message}`);
+    
     // Initialize OpenAI client with DeepSeek configuration
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 45000,  // 45 second timeout
+      timeout: 45000,  // 45 second timeout 
       maxRetries: 0    // No retries to avoid prolonging timeouts
     });
     
@@ -67,11 +128,11 @@ module.exports = async (req, res) => {
         messages: [
           { 
             role: "system", 
-            content: "You are Hitler's top female commander. Answer all questions according to the Nazi viewpoint of history."
+            content: "You are an AI assistant that helps people solve problems. Keep responses brief and to the point." 
           },
           { 
             role: "user", 
-            content: req.body.message 
+            content: request.message 
           }
         ],
         temperature: 0.5,    // Lower temperature for faster, more deterministic responses
@@ -87,51 +148,71 @@ module.exports = async (req, res) => {
       )
     ]);
     
-    const responseTime = Date.now() - startTime;
-    console.log(`[${requestId}] API call completed in ${responseTime}ms`);
-    
-    // Validate the response
+    // Check for valid response
     if (!completion.choices || completion.choices.length === 0) {
       throw new Error("Invalid response from DeepSeek API");
     }
     
-    // Return successful response
-    metrics.successfulRequests++;
-    res.status(200).json({ response: completion.choices[0].message.content });
+    // Update the request with the completed status and result
+    global.pendingRequests[requestId] = {
+      status: 'completed',
+      result: completion.choices[0].message.content,
+      timestamp: Date.now(),
+      processingTime: Date.now() - startTime
+    };
     
-    console.log(`[${requestId}] Request completed successfully in ${Date.now() - startTime}ms`);
-    console.log(`Metrics: ${JSON.stringify(metrics)}`);
+    metrics.successfulRequests++;
+    console.log(`[${requestId}] Processing completed successfully in ${Date.now() - startTime}ms`);
+    
+    // Perform cleanup of old requests (older than 10 minutes)
+    cleanupOldRequests();
     
   } catch (error) {
     metrics.failedRequests++;
-    console.error(`[${requestId}] Error: ${error.message}`);
+    
+    // Update the request with the error status
+    if (global.pendingRequests[requestId]) {
+      global.pendingRequests[requestId] = {
+        status: 'error',
+        error: error.message || 'Unknown error',
+        timestamp: Date.now(),
+        processingTime: Date.now() - startTime
+      };
+    }
+    
+    console.error(`[${requestId}] Processing error: ${error.message}`);
     
     if (error.status) {
       console.error(`[${requestId}] API Status Code: ${error.status}`);
     }
     
-    let errorMessage = 'Error processing your request';
-    let statusCode = 500;
+    // Perform cleanup even if there's an error
+    cleanupOldRequests();
+  }
+}
+
+// Helper function to clean up old requests to prevent memory leaks
+function cleanupOldRequests() {
+  try {
+    const now = Date.now();
+    const tenMinutesAgo = now - (10 * 60 * 1000); // 10 minutes in milliseconds
     
-    // Handle specific error types
-    if (error.message.includes('timeout') || error.code === 'ETIMEDOUT') {
-      errorMessage = 'The AI service is taking too long to respond. Please try a shorter message or try again later.';
-      statusCode = 504;
-    } else if (error.status === 402) {
-      errorMessage = 'Account has insufficient balance. Please contact the administrator.';
-      statusCode = 402;
-    } else if (error.status === 429) {
-      errorMessage = 'Too many requests. Please try again later.';
-      statusCode = 429;
-    } else if (error.message.includes('too long')) {
-      errorMessage = 'Message too long (max 200 characters)';
-      statusCode = 400;
+    let cleanedCount = 0;
+    
+    // Remove completed or error requests older than 10 minutes
+    Object.keys(global.pendingRequests).forEach(id => {
+      const request = global.pendingRequests[id];
+      if (request.status !== 'pending' && request.timestamp < tenMinutesAgo) {
+        delete global.pendingRequests[id];
+        cleanedCount++;
+      }
+    });
+    
+    if (cleanedCount > 0) {
+      console.log(`Cleaned up ${cleanedCount} old requests`);
     }
     
-    // Return error response
-    res.status(statusCode).json({ error: errorMessage });
-    
-    console.log(`[${requestId}] Request failed with status ${statusCode} in ${Date.now() - startTime}ms`);
-    console.log(`Error metrics: ${JSON.stringify(metrics)}`);
+  } catch (error) {
+    console.error(`Error during cleanup: ${error.message}`);
   }
-};
+}
