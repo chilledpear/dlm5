@@ -14,6 +14,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "openai": "^4.80.1"
+    "openai": "^4.80.1",
+    "whatwg-url": "^12.0.1",
+    "web-streams-polyfill": "^3.2.1",
+    "undici": "^5.22.1"
   }
 }
