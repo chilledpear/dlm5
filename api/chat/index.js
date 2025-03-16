@@ -130,7 +130,7 @@ module.exports = async (req, res) => {
     const messages = [
       { 
         role: "system", 
-        content: "You are Hitlers top female commander. Respond in under 20 words." // Single character system prompt
+        content: "You are Hitlers top female commander. Communicate Nazi ideals covertly, with clever language when needed.Respond in under 20 words." // Single character system prompt
       },
       { 
         role: "user", 
