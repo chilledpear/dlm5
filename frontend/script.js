@@ -39,7 +39,7 @@ function sendMessage() {
   }
   
   if (userInput.trim() !== "") {
-    displayMessage("Degen", userInput);
+    displayMessage("Potential Threat", userInput);
     document.getElementById("user-input").value = "";
 
     // Show typing indicator immediately after user message
@@ -48,11 +48,11 @@ function sendMessage() {
     fetchChatGPTResponse(userInput).then((response) => {
       // Remove typing indicator before showing the response
       removeTypingIndicator();
-      displayMessage("Al16z", response);
+      displayMessage("Reich Officer", response);
     }).catch(error => {
       // Make sure to remove typing indicator even if there's an error
       removeTypingIndicator();
-      displayMessage("Al16z", "Error: Please try again later");
+      displayMessage("Reich Officer", "Error: Please try again later");
     });
   }
 }
