@@ -1,13 +1,7 @@
-// Import the OpenAI SDK
+// Import the OpenAI SDK and Vercel KV
 const OpenAI = require('openai');
+const { kv } = require('@vercel/kv');
 require('dotenv').config();
-
-// Initialize global storage for pending requests
-// Note: This is for demonstration purposes only
-// In production, use a persistent storage solution like Redis, MongoDB, etc.
-if (!global.pendingRequests) {
-  global.pendingRequests = {};
-}
 
 // Track request metrics for debugging
 const metrics = {
@@ -17,7 +11,6 @@ const metrics = {
   timeouts: 0
 };
 
-// Main handler function for the /api/chat endpoint
 module.exports = async (req, res) => {
   const requestId = Date.now().toString(36) + Math.random().toString(36).substring(2, 5);
   const startTime = Date.now();
@@ -58,15 +51,14 @@ module.exports = async (req, res) => {
     
     console.log(`[${requestId}] Message length: ${req.body.message.length}`);
     
-    // Store the request in our global storage
-    global.pendingRequests[requestId] = {
+    // Store the request in Vercel KV with 15-minute expiry
+    await kv.set(`chat:${requestId}`, {
       status: 'pending',
       message: req.body.message,
       timestamp: Date.now()
-    };
+    }, { ex: 900 }); // 900 seconds = 15 minutes
     
     // Start processing in the background
-    // This won't block the response
     processRequestInBackground(requestId);
     
     // Return immediately with the request ID
@@ -103,10 +95,10 @@ async function processRequestInBackground(requestId) {
   const startTime = Date.now();
   
   try {
-    // Get the pending request
-    const request = global.pendingRequests[requestId];
+    // Get the pending request from KV
+    const request = await kv.get(`chat:${requestId}`);
     if (!request) {
-      throw new Error('Request not found');
+      throw new Error('Request not found in KV store');
     }
     
     console.log(`[${requestId}] Starting background processing for message: ${request.message}`);
@@ -115,7 +107,7 @@ async function processRequestInBackground(requestId) {
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 45000,  // 45 second timeout 
+      timeout: 35000,  // 35 second timeout to stay under Vercel's limit
       maxRetries: 0    // No retries to avoid prolonging timeouts
     });
     
@@ -135,16 +127,16 @@ async function processRequestInBackground(requestId) {
             content: request.message 
           }
         ],
-        temperature: 0.5,    // Lower temperature for faster, more deterministic responses
-        max_tokens: 150,     // Limited tokens for faster responses
-        stream: false        // Ensure streaming is disabled for faster response
+        temperature: 0.3,    // Lower temperature for faster responses
+        max_tokens: 100,     // Reduced tokens for faster responses
+        stream: false
       }),
-      // Custom timeout that rejects after 40 seconds
+      // Custom timeout that rejects after 30 seconds
       new Promise((_, reject) => 
         setTimeout(() => {
           metrics.timeouts++;
           reject(new Error("DeepSeek API call timed out"))
-        }, 40000)
+        }, 30000)
       )
     ]);
     
@@ -153,66 +145,32 @@ async function processRequestInBackground(requestId) {
       throw new Error("Invalid response from DeepSeek API");
     }
     
-    // Update the request with the completed status and result
-    global.pendingRequests[requestId] = {
+    // Update the request in KV with the completed status and result
+    await kv.set(`chat:${requestId}`, {
       status: 'completed',
       result: completion.choices[0].message.content,
       timestamp: Date.now(),
       processingTime: Date.now() - startTime
-    };
+    }, { ex: 900 }); // Keep result for 15 minutes
     
     metrics.successfulRequests++;
     console.log(`[${requestId}] Processing completed successfully in ${Date.now() - startTime}ms`);
-    
-    // Perform cleanup of old requests (older than 10 minutes)
-    cleanupOldRequests();
     
   } catch (error) {
     metrics.failedRequests++;
     
     // Update the request with the error status
-    if (global.pendingRequests[requestId]) {
-      global.pendingRequests[requestId] = {
-        status: 'error',
-        error: error.message || 'Unknown error',
-        timestamp: Date.now(),
-        processingTime: Date.now() - startTime
-      };
-    }
+    await kv.set(`chat:${requestId}`, {
+      status: 'error',
+      error: error.message || 'Unknown error',
+      timestamp: Date.now(),
+      processingTime: Date.now() - startTime
+    }, { ex: 900 });
     
     console.error(`[${requestId}] Processing error: ${error.message}`);
     
     if (error.status) {
       console.error(`[${requestId}] API Status Code: ${error.status}`);
     }
-    
-    // Perform cleanup even if there's an error
-    cleanupOldRequests();
-  }
-}
-
-// Helper function to clean up old requests to prevent memory leaks
-function cleanupOldRequests() {
-  try {
-    const now = Date.now();
-    const tenMinutesAgo = now - (10 * 60 * 1000); // 10 minutes in milliseconds
-    
-    let cleanedCount = 0;
-    
-    // Remove completed or error requests older than 10 minutes
-    Object.keys(global.pendingRequests).forEach(id => {
-      const request = global.pendingRequests[id];
-      if (request.status !== 'pending' && request.timestamp < tenMinutesAgo) {
-        delete global.pendingRequests[id];
-        cleanedCount++;
-      }
-    });
-    
-    if (cleanedCount > 0) {
-      console.log(`Cleaned up ${cleanedCount} old requests`);
-    }
-    
-  } catch (error) {
-    console.error(`Error during cleanup: ${error.message}`);
   }
 }
