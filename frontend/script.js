@@ -9,11 +9,11 @@ document.getElementById("send-btn").addEventListener("click", sendMessage);
 function sendMessage() {
   const userInput = document.getElementById("user-input").value;
   if (userInput.trim() !== "") {
-    displayMessage("Degen", userInput);
+    displayMessage("Allied Power", userInput);
     document.getElementById("user-input").value = "";
 
     fetchChatGPTResponse(userInput).then((response) => {
-      displayMessage("Al16z", response);
+      displayMessage("Commander", response);
     });
   }
 }
