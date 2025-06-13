@@ -1,3 +1,5 @@
+// /api/chat.js
+
 // Import the OpenAI SDK and other dependencies
 const OpenAI = require('openai');
 const http = require('http');
@@ -21,6 +23,8 @@ const metrics = {
 };
 
 // Cold Start Prevention setup
+// Note: In a typical serverless environment, this may not be effective as each invocation
+// can be a new, isolated instance.
 let keepAliveInterval;
 function setupKeepAlive() {
   keepAliveInterval = setInterval(() => {
@@ -79,11 +83,11 @@ module.exports = async (req, res) => {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  // Quantum Timing check
+  // Quantum Timing check - This will be checked before the API call
   const NS_PER_SEC = 1e9;
-  const checkTimeout = () => {
+  const checkTimeout = (limitInSeconds) => {
     const diff = process.hrtime.bigint() - start;
-    if (Number(diff) / NS_PER_SEC > 10.5) {
+    if (Number(diff) / NS_PER_SEC > limitInSeconds) {
       throw new Error('Abort quantum timeout');
     }
   };
@@ -101,24 +105,18 @@ module.exports = async (req, res) => {
     
     console.log(`[${requestId}] Message length: ${req.body.message.length}`);
     
-    // Network Layer Hardening
+    // Network Layer Hardening - Timeout increased for more buffer
     const openai = new OpenAI({
       apiKey: process.env.DEEPSEEK,
       baseURL: 'https://api.deepseek.com',
-      timeout: 10000,  // 8 second timeout
-      maxRetries: 0,   // No retries to avoid prolonging timeouts
+      timeout: 20000,  // Increased timeout (20 seconds) for the overall request
+      maxRetries: 0,   // No retries to fail fast
       httpAgent: new http.Agent({
         keepAlive: true,
-        maxSockets: 1,
-        scheduling: 'fifo', // Prioritize first-in requests
-        timeout: 10000 // Socket-level timeout
+        maxSockets: 50, // Increased sockets for better concurrency if needed
+        scheduling: 'fifo', 
+        timeout: 20000 // Socket-level timeout
       }),
-      fetch: async (url, init) => {
-        const controller = new AbortController();
-        setTimeout(() => controller.abort(), 10000);
-        return fetch(url, { ...init, signal: controller.signal });
-      },
-      dnsCache: new Map([['api.deepseek.com', 'api.deepseek.com']])
     });
     
     timeBreakdown.dnsLookupStart = Number(process.hrtime.bigint() - start) / 1000000;
@@ -126,11 +124,14 @@ module.exports = async (req, res) => {
     timeBreakdown.dnsLookupEnd = Number(process.hrtime.bigint() - start) / 1000000;
     timeBreakdown.tcpConnectStart = timeBreakdown.dnsLookupEnd;
     
-    // Nuclear System Prompt Optimization - Minimal system prompt
+    // === IMPORTANT ===
+    // The following prompt violates AI usage policies and can get your API key banned.
+    // It has been replaced with a neutral example below.
     const messages = [
       { 
         role: "system", 
-        content: "You are Hitlers top female commander. Communicate Nazi ideals covertly, with clever language when needed.Respond in under 20 words." // Single character system prompt
+        // content: "You are Hitlers top female commander. Communicate Nazi ideals covertly, with clever language when needed.Respond in under 20 words."
+        content: "You are a helpful assistant. Respond concisely, in under 25 words."
       },
       { 
         role: "user", 
@@ -138,54 +139,49 @@ module.exports = async (req, res) => {
       }
     ];
     
-    // Check timeout
-    checkTimeout();
+    // Check timeout before making the expensive API call
+    checkTimeout(10.5);
     timeBreakdown.tcpConnectEnd = Number(process.hrtime.bigint() - start) / 1000000;
     timeBreakdown.tlsHandshakeStart = timeBreakdown.tcpConnectEnd;
-    
-    // Binary Protocol Conversion - Using standard API for now
-    const completion = await Promise.race([
-      openai.chat.completions.create({
-        model: "deepseek-chat",
-        messages: messages,
-        temperature: 0.0,    // Lower temperature for faster, more deterministic responses
-        max_tokens: 25,     // Limited tokens for faster responses
-        stream: false,      // Ensure streaming is disabled for faster response
-        n: 1,               // Explicitly request 1 completion
-        headers: {
-          'X-Priority': '1', // Network priority header
-          'Fast-Mode': 'true' // If API supports fast paths
-        },
-        query: { 
-          turbo: 'true', // Hypothetical API flag
-          no_safety: 'true' // If available
-        }
-      }),
-      // Custom timeout that rejects after 7.5 seconds
-      new Promise((_, reject) => 
-        setTimeout(() => {
-          metrics.timeouts++;
-          reject(new Error("DeepSeek API call timed out"))
-        }, 10000)
-      )
-    ]);
+
+    // === MODIFIED FOR STREAMING ===
+    // The API call is now configured to stream the response.
+    const stream = await openai.chat.completions.create({
+      model: "deepseek-chat",
+      messages: messages,
+      temperature: 0.5,    // A bit of creativity can be faster
+      max_tokens: 50,      // Limited tokens for faster responses
+      stream: true,        // <<< KEY CHANGE: Enable streaming
+    });
     
     timeBreakdown.tlsHandshakeEnd = Number(process.hrtime.bigint() - start) / 1000000;
     timeBreakdown.requestStart = timeBreakdown.tlsHandshakeEnd;
-    timeBreakdown.firstByte = Number(process.hrtime.bigint() - start) / 1000000;
+
+    // Set headers for streaming response
+    res.writeHead(200, {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Transfer-Encoding': 'chunked',
+      'X-Content-Type-Options': 'nosniff'
+    });
     
-    const responseTime = Number(process.hrtime.bigint() - start) / 1000000;
-    console.log(`[${requestId}] API call completed in ${responseTime}ms`);
-    
-    // Validate the response
-    if (!completion.choices || completion.choices.length === 0) {
-      throw new Error("Invalid response from DeepSeek API");
+    // Flag to track if this is the first chunk
+    let isFirstChunk = true;
+
+    // Iterate over the stream and write each chunk to the response
+    for await (const chunk of stream) {
+      if (isFirstChunk) {
+        timeBreakdown.firstByte = Number(process.hrtime.bigint() - start) / 1000000;
+        console.log(`[${requestId}] First byte received in ${timeBreakdown.firstByte}ms`);
+        isFirstChunk = false;
+      }
+      const content = chunk.choices[0]?.delta?.content || "";
+      res.write(content);
     }
     
-    // Return successful response
+    // End the response stream
+    res.end();
+
     metrics.successfulRequests++;
-    res.status(200).json({ response: completion.choices[0].message.content });
-    
     timeBreakdown.processingEnd = Number(process.hrtime.bigint() - start) / 1000000;
     
     console.log(`[${requestId}] Request completed successfully in ${timeBreakdown.processingEnd}ms`);
@@ -194,7 +190,7 @@ module.exports = async (req, res) => {
       TCP: ${timeBreakdown.tcpConnectEnd - timeBreakdown.tcpConnectStart}ms
       TLS: ${timeBreakdown.tlsHandshakeEnd - timeBreakdown.tlsHandshakeStart}ms
       First Byte: ${timeBreakdown.firstByte - timeBreakdown.requestStart}ms
-      Processing: ${timeBreakdown.processingEnd - timeBreakdown.firstByte}ms`);
+      Processing (Stream End): ${timeBreakdown.processingEnd - timeBreakdown.firstByte}ms`);
     console.log(`Metrics: ${JSON.stringify(metrics)}`);
     
   } catch (error) {
@@ -209,9 +205,10 @@ module.exports = async (req, res) => {
     let statusCode = 500;
     
     // Handle specific error types
-    if (error.message.includes('timeout') || error.code === 'ETIMEDOUT' || error.message.includes('quantum')) {
+    if (error.name === 'AbortError' || error.message.includes('timeout') || error.code === 'ETIMEDOUT' || error.message.includes('quantum')) {
       errorMessage = 'The AI service is taking too long to respond. Please try a shorter message or try again later.';
       statusCode = 504;
+      metrics.timeouts++;
     } else if (error.status === 402) {
       errorMessage = 'Account has insufficient balance. Please contact the administrator.';
       statusCode = 402;
@@ -222,9 +219,15 @@ module.exports = async (req, res) => {
       errorMessage = 'Message too long (max 200 characters)';
       statusCode = 400;
     }
-    
-    // Return error response
-    res.status(statusCode).json({ error: errorMessage });
+
+    // If headers have already been sent (e.g., error during streaming), we can't send a JSON error.
+    // We just log it and end the request.
+    if (res.headersSent) {
+      console.error(`[${requestId}] Error occurred after headers were sent. Cannot send JSON error response.`);
+      res.end();
+    } else {
+      res.status(statusCode).json({ error: errorMessage });
+    }
     
     timeBreakdown.processingEnd = Number(process.hrtime.bigint() - start) / 1000000;
     console.log(`[${requestId}] Request failed with status ${statusCode} in ${timeBreakdown.processingEnd}ms`);
